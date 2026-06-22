@@ -1,0 +1,23 @@
+{
+  "name": "tryiton/tryiton",
+  "description": "Official PHP SDK for the TryItOn virtual try-on API.",
+  "type": "library",
+  "license": "MIT",
+  "keywords": ["tryiton", "virtual-try-on", "tryon", "fashion", "ai", "sdk"],
+  "homepage": "https://docs.tryiton.now",
+  "support": {
+    "docs": "https://docs.tryiton.now",
+    "source": "https://github.com/tryiton-now/tryiton-php",
+    "issues": "https://github.com/tryiton-now/tryiton-php/issues"
+  },
+  "require": {
+    "php": ">=7.4",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "TryItOn\\": "src/"
+    }
+  }
+}
