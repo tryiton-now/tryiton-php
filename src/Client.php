@@ -48,8 +48,8 @@ class Client
      * Put a garment or accessory on a person. Returns the job id.
      *
      * Accepts: model_image (required), garment_image (required), category,
-     * subcategory, mode, num_samples, output_format, seed, segmentation_free,
-     * garment_photo_type, moderation_level.
+     * subcategory, mode, num_samples (1-4), output_format ("png"/"jpeg"),
+     * moderation_level ("conservative"/"permissive"/"none").
      *
      * @param array<string, mixed> $params
      */
@@ -60,7 +60,8 @@ class Client
 
     /**
      * Restyle a person's hair. Returns the job id.
-     * Accepts: face_image (required), haircut (required), hair_color.
+     * Accepts: face_image (required), haircut (required), hair_color,
+     * num_samples (1-4), output_format ("png"/"jpeg").
      *
      * @param array<string, mixed> $params
      */
@@ -71,7 +72,8 @@ class Client
 
     /**
      * Ink a design onto skin. Returns the job id.
-     * Accepts: body_image (required), design_image (required), placement.
+     * Accepts: body_image (required), design_image (required), placement,
+     * num_samples (1-4), output_format ("png"/"jpeg").
      *
      * @param array<string, mixed> $params
      */
