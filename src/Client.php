@@ -73,7 +73,13 @@ class Client
     /**
      * Ink a design onto skin. Returns the job id.
      * Accepts: body_image (required), design_image (required), placement,
-     * num_samples (1-4), output_format ("png"/"jpeg").
+     * region, num_samples (1-4), output_format ("png"/"jpeg").
+     *
+     * Position the ink two ways, and they compose: `placement` is free text
+     * ("on the right forearm, small"); `region` pins the exact spot as
+     * ['x' => .., 'y' => .., 'w' => .., 'h' => ..], normalized 0-1 from the
+     * body image's top-left corner, each side at least 0.06. With a region,
+     * `placement` only describes size/style.
      *
      * @param array<string, mixed> $params
      */

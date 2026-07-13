@@ -66,11 +66,13 @@ $client->tryOnHairstyle([
     'hair_color' => 'ash blonde',
 ]);
 
-// Tattoo try-on
+// Tattoo try-on — place it with free text, or pin the exact spot with a
+// region box (normalized 0-1, from the image's top-left corner).
 $client->tryOnTattoo([
     'body_image'   => $bodyUrl,
     'design_image' => $designUrl,
     'placement'    => 'on the right forearm, small',
+    // 'region'    => ['x' => 0.32, 'y' => 0.18, 'w' => 0.28, 'h' => 0.34],
 ]);
 
 // Poll a job manually, or check your credit balance
