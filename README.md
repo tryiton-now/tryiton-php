@@ -29,7 +29,7 @@ use TryItOn\Client;
 $client = new Client(getenv('TRYITON_API_KEY'));
 
 // Submit a clothing try-on
-$jobId = $client->tryOnClothes([
+$jobId = $client->tryOnFashion([
     'model_image'   => 'https://example.com/model.jpg',
     'garment_image' => 'https://example.com/tshirt.jpg',
     'category'      => 'clothing',
@@ -45,7 +45,7 @@ Image inputs accept a public URL or a base64 data URL (`data:image/png;base64,..
 
 ## Core parameters
 
-`tryOnClothes` covers clothing and accessory try-on. The most important parameters:
+`tryOnFashion` covers clothing and accessory try-on. The most important parameters:
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
@@ -88,7 +88,7 @@ All failures throw `TryItOn\TryItOnException`, which carries the HTTP status cod
 use TryItOn\TryItOnException;
 
 try {
-    $client->tryOnClothes([ /* ... */ ]);
+    $client->tryOnFashion([ /* ... */ ]);
 } catch (TryItOnException $e) {
     echo $e->status . ' ' . $e->errorName . ' ' . $e->getMessage(); // e.g. 429 OutOfCredits
 }

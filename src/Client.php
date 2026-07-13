@@ -9,7 +9,7 @@ namespace TryItOn;
  *
  * Example:
  *   $client = new \TryItOn\Client('YOUR_API_KEY');
- *   $jobId = $client->tryOnClothes([
+ *   $jobId = $client->tryOnFashion([
  *       'model_image'   => 'https://example.com/model.jpg',
  *       'garment_image' => 'https://example.com/tshirt.jpg',
  *       'category'      => 'clothing',
@@ -53,9 +53,9 @@ class Client
      *
      * @param array<string, mixed> $params
      */
-    public function tryOnClothes(array $params): string
+    public function tryOnFashion(array $params): string
     {
-        return $this->request('POST', '/tryon/clothes', $params)['jobId'];
+        return $this->request('POST', '/tryon/fashion', $params)['jobId'];
     }
 
     /**
