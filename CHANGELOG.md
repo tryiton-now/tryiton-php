@@ -4,7 +4,13 @@ All notable changes to `tryiton/tryiton` are documented here. The format is base
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Versions are git tags (`vX.Y.Z`).
 
-## [2.1.0] - Unreleased
+## [Unreleased]
+
+### Deprecated
+
+- The `mode` and `moderation_level` keys of `tryOnFashion()`: the API ignores `mode` and validates `moderation_level` without applying it. Removed in 3.0.
+
+## [2.1.0] - 2026-11-26
 
 ### Added
 
@@ -66,7 +72,8 @@ All notable changes to `tryiton/tryiton` are documented here. The format is base
 - First release: `tryOnClothes()`, `tryOnHairstyle()`, `tryOnTattoo()`, `getStatus()`, `waitForResult()`,
   `getCredits()` and `TryItOnException`.
 
-[2.1.0]: https://github.com/tryiton-now/tryiton-php/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/tryiton-now/tryiton-php/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/tryiton-now/tryiton-php/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/tryiton-now/tryiton-php/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/tryiton-now/tryiton-php/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tryiton-now/tryiton-php/compare/v0.1.0...v1.0.0
