@@ -80,6 +80,36 @@ $status  = $client->getStatus($jobId);  // ['status' => ..., 'output' => [...], 
 $credits = $client->getCredits();        // ['on_demand' => ..., 'subscription' => ..., 'purchased' => ..., 'reserved' => ...]
 ```
 
+## Live try-on (real-time webcam)
+
+Your server prepares garments and starts sessions with the API key. The shopper's browser streams with the
+[`tryiton-live`](https://www.npmjs.com/package/tryiton-live) npm package, using only the session-scoped response.
+
+```php
+// Once per product, e.g. at catalog sync (cached per image + category):
+$garment = $client->prepareLiveGarment([
+    'garment_image' => $productImageUrl,
+    'category'      => 'clothing',
+    'subcategory'   => 'tops',
+]);
+
+// When a shopper opens live try-on. Return $start to the browser as-is:
+$start = $client->startLiveSession([
+    'garment_id'     => $garment['id'],
+    'end_user_id'    => $shopper->id,               // one stream per end user
+    'allowed_origin' => 'https://shop.example.com',  // locks the media token to your site
+]);
+header('Content-Type: application/json');
+echo json_encode($start);
+
+$client->getLiveSession($start['session']['id']);   // ['status' => ..., 'seconds' => ..., 'creditsCharged' => ..., ...]
+$client->stopLiveSession($start['session']['id']);  // end it from your server
+$client->getLiveConfig();                           // ['enabled' => ..., 'secondsPerCredit' => ..., 'maxSeconds' => ..., ...]
+```
+
+Billing is per `secondsPerCredit` seconds of streamed video, from the first try-on frame. Garment switches during a
+session are free.
+
 ## Error handling
 
 All failures throw `TryItOn\TryItOnException`, which carries the HTTP status code and the API error name.
@@ -94,6 +124,21 @@ try {
 }
 ```
 
+`status` is `null` for failures that aren't an HTTP error response: `NetworkError` (including request timeouts),
+`ProcessingError` (the job failed; the message is the reason), `Timeout` (`waitForResult` gave up) and `ConfigError`.
+
+## Custom HTTP transport
+
+Requests go through cURL by default. To add retries, logging or a proxy, or to stub the API in your own tests, implement
+`TryItOn\HttpTransport` and pass it as the last constructor argument:
+
+```php
+$client = new Client(getenv('TRYITON_API_KEY'), 'https://tryiton.now/api/v1', 60, new MyTransport());
+```
+
+`send($method, $url, $headers, $body)` returns `['status' => int, 'body' => string]` for every HTTP status. The client
+parses the JSON and raises the API errors. Your transport owns its timeout.
+
 ## Notes
 
 - Output image URLs expire 72 hours after completion. Download any results you want to keep.
@@ -102,6 +147,17 @@ try {
 ## Documentation
 
 Full documentation, parameter reference, and guides: [docs.tryiton.now](https://docs.tryiton.now)
+
+## Development
+
+```bash
+composer install
+composer test       # PHPUnit: unit tests + the shared SDK contract (tests/fixtures/sdk-cases.json)
+composer analyse    # PHPStan, level 10
+```
+
+`tests/fixtures/sdk-cases.json` is the API contract every TryItOn SDK runs. It's generated from the backend, so don't
+edit it by hand. Releases are git tags (`vX.Y.Z`); bump `Client::VERSION` and `CHANGELOG.md` to match before tagging.
 
 ## License
 

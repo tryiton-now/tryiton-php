@@ -16,9 +16,9 @@ class TryItOnException extends \Exception
     /** The API error name, e.g. "OutOfCredits" or "ProcessingError". */
     public ?string $errorName;
 
-    public function __construct(string $message, ?int $status = null, ?string $errorName = null)
+    public function __construct(string $message, ?int $status = null, ?string $errorName = null, ?\Throwable $previous = null)
     {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
         $this->status = $status;
         $this->errorName = $errorName;
     }
