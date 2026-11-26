@@ -1,0 +1,7 @@
+parameters:
+    # 10 is the strictest level: mixed values (decoded JSON) must be narrowed before use.
+    level: 10
+    paths:
+        - src
+    # The oldest PHP the package supports, so 8.x-only functions and syntax are reported.
+    phpVersion: 70400

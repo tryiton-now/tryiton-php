@@ -15,9 +15,25 @@
     "ext-curl": "*",
     "ext-json": "*"
   },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^9.6"
+  },
   "autoload": {
     "psr-4": {
       "TryItOn\\": "src/"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "TryItOn\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "analyse": "phpstan analyse --no-progress"
+  },
+  "config": {
+    "sort-packages": true
   }
 }

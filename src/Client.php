@@ -17,10 +17,22 @@ namespace TryItOn;
  *   ]);
  *   $urls = $client->waitForResult($jobId);
  *
+ * Responses are plain arrays. Their shapes are declared below for PHPStan and
+ * Psalm; import them with `@phpstan-import-type LiveSession from \TryItOn\Client`.
+ *
+ * @phpstan-type LiveGarment array{id: string, category: string, subcategory: string|null, description: string|null, createdAt: string}
+ * @phpstan-type LiveSession array{id: string, status: 'active'|'ended', endReason: string|null, seconds: int, creditsCharged: int, endUserId: string|null, createdAt: string, endedAt: string|null}
+ *
  * @see https://docs.tryiton.now
  */
 class Client
 {
+    /**
+     * SDK version, sent in the User-Agent header. Keep it in sync with the
+     * release tag (vX.Y.Z) and CHANGELOG.md.
+     */
+    public const VERSION = '2.1.0';
+
     public const HAIRCUTS = [
         'Afro', 'BobCut', 'BowlCut', 'BoxBraids', 'BuzzCut', 'Chignon', 'CombOver',
         'CornrowBraids', 'CurlyBob', 'CurlyShag', 'DoubleBun', 'Dreadlocks', 'FauxHawk',
@@ -32,16 +44,28 @@ class Client
 
     private string $apiKey;
     private string $baseUrl;
-    private int $timeout;
+    private HttpTransport $transport;
 
-    public function __construct(string $apiKey, string $baseUrl = 'https://tryiton.now/api/v1', int $timeout = 60)
-    {
+    /**
+     * @param string $apiKey Your API key from https://tryiton.now/app/developer
+     * @param string $baseUrl Override the API base URL.
+     * @param int $timeout Per-request timeout in seconds for the default cURL transport.
+     * @param HttpTransport|null $transport Send requests through your own transport
+     *        (retries, logging, a proxy, a test stub). It owns its timeout, so
+     *        $timeout is ignored when you pass one.
+     */
+    public function __construct(
+        string $apiKey,
+        string $baseUrl = 'https://tryiton.now/api/v1',
+        int $timeout = 60,
+        ?HttpTransport $transport = null
+    ) {
         if ($apiKey === '') {
             throw new TryItOnException('An apiKey is required.', null, 'ConfigError');
         }
         $this->apiKey = $apiKey;
         $this->baseUrl = rtrim($baseUrl, '/');
-        $this->timeout = $timeout;
+        $this->transport = $transport ?? new CurlTransport($timeout);
     }
 
     /**
@@ -55,7 +79,7 @@ class Client
      */
     public function tryOnFashion(array $params): string
     {
-        return $this->request('POST', '/tryon/fashion', $params)['jobId'];
+        return self::stringField($this->request('POST', '/tryon/fashion', $params), 'jobId');
     }
 
     /**
@@ -67,7 +91,7 @@ class Client
      */
     public function tryOnHairstyle(array $params): string
     {
-        return $this->request('POST', '/tryon/hairstyle', $params)['jobId'];
+        return self::stringField($this->request('POST', '/tryon/hairstyle', $params), 'jobId');
     }
 
     /**
@@ -75,33 +99,38 @@ class Client
      * Accepts: body_image (required), design_image (required), placement,
      * region, num_samples (1-4), output_format ("png"/"jpeg").
      *
-     * Position the ink two ways, and they compose: `placement` is free text
-     * ("on the right forearm, small"); `region` pins the exact spot as
-     * ['x' => .., 'y' => .., 'w' => .., 'h' => ..], normalized 0-1 from the
-     * body image's top-left corner, each side at least 0.06. With a region,
-     * `placement` only describes size/style.
+     * `region` is ['x', 'y', 'w', 'h'] normalized 0-1 from the top-left, each side
+     * >= 0.06; with it, `placement` only describes size/style.
      *
      * @param array<string, mixed> $params
      */
     public function tryOnTattoo(array $params): string
     {
-        return $this->request('POST', '/tryon/tattoo', $params)['jobId'];
+        return self::stringField($this->request('POST', '/tryon/tattoo', $params), 'jobId');
     }
 
     /**
      * Fetch the current status of a job.
      *
-     * @return array{status: string, output: array<string>, error: ?array{name: string, message: string}}
+     * `output` holds the result image URLs once completed (they expire after
+     * 72h). `error` is why the job failed, or null: the API sends a plain
+     * string; the array form is the older shape, kept for code written
+     * against it. waitForResult() turns either into a TryItOnException.
+     *
+     * @return array{status: 'processing'|'completed'|'failed', output: list<string>, error: string|array{name?: string, message?: string}|null}
      */
     public function getStatus(string $jobId): array
     {
         $data = $this->request('GET', '/status/' . rawurlencode($jobId));
 
-        return [
+        /** @var array{status: 'processing'|'completed'|'failed', output: list<string>, error: string|array{name?: string, message?: string}|null} $status */
+        $status = [
             'status' => $data['status'] ?? 'processing',
             'output' => $data['output'] ?? [],
             'error' => $data['error'] ?? null,
         ];
+
+        return $status;
     }
 
     /**
@@ -111,14 +140,135 @@ class Client
      */
     public function getCredits(): array
     {
-        return $this->request('GET', '/credits')['credits'];
+        /** @var array{on_demand: int, subscription: int, purchased: int, reserved: int} $credits */
+        $credits = self::arrayField($this->request('GET', '/credits'), 'credits');
+
+        return $credits;
+    }
+
+    /**
+     * Live (real-time webcam) try-on availability and pricing for your account.
+     *
+     * Live try-on is server side only here: your server prepares garments and
+     * starts sessions with the API key; the end user's browser streams with the
+     * `tryiton-live` npm package, using the startLiveSession() response
+     * (session-scoped credentials, never your API key).
+     *
+     * @return array{enabled: bool, secondsPerCredit: int, maxSeconds: int, minCredits: int, maxConcurrentSessions: int}
+     */
+    public function getLiveConfig(): array
+    {
+        $data = $this->request('GET', '/live/config');
+        unset($data['ok']);
+
+        /** @var array{enabled: bool, secondsPerCredit: int, maxSeconds: int, minCredits: int, maxConcurrentSessions: int} $config */
+        $config = $data;
+
+        return $config;
+    }
+
+    /**
+     * Prepare a garment for live try-on. Returns the garment
+     * (id, category, subcategory, description, createdAt).
+     *
+     * Do it once per product, ahead of time (e.g. at catalog sync): it's cached
+     * per image and category, so starting a session or switching garments later
+     * is instant.
+     *
+     * Accepts: garment_image (required; URL or base64 data URL, a product photo
+     * on a plain background works best), category (recommended; omit to let it
+     * be detected), subcategory (e.g. "tops" for clothing). camelCase keys
+     * (garmentImage) work too.
+     *
+     * @param array<string, mixed> $params
+     * @return LiveGarment
+     */
+    public function prepareLiveGarment(array $params): array
+    {
+        $body = [
+            'garment_image' => self::param($params, 'garmentImage', 'garment_image'),
+            'category' => $params['category'] ?? null,
+            'subcategory' => $params['subcategory'] ?? null,
+        ];
+
+        /** @var LiveGarment $garment */
+        $garment = self::arrayField($this->request('POST', '/live/garments', $body), 'garment');
+
+        return $garment;
+    }
+
+    /**
+     * Start a live session for one end user. Holds the first credit.
+     *
+     * Send the result to the browser unchanged (e.g. json_encode() it in your
+     * response); it streams with `connectLiveTryOn` from the `tryiton-live` npm
+     * package. Contains session, clientSecret, connection, secondsPerCredit,
+     * maxSeconds, secondsLeft and garment (with its stream input, or null).
+     *
+     * Accepts: garment_id (a prepared garment to start with), max_seconds (cap
+     * this session, 10..maxSeconds), end_user_id (your id for the end user: one
+     * stream per end user, a restart ends their previous one), allowed_origin
+     * (lock the media token to your site, e.g. "https://shop.example.com").
+     * camelCase keys (garmentId, ...) work too.
+     *
+     * @param array<string, mixed> $params
+     * @return array{ok: true, session: LiveSession, clientSecret: string, connection: array{provider: string, model: string, token: string}, secondsPerCredit: int, maxSeconds: int, secondsLeft: int, garment: array{id: string, category: string, subcategory: string|null, description: string|null, createdAt: string, input: array{prompt: string, enhancePrompt: bool, referenceImage: string}}|null}
+     */
+    public function startLiveSession(array $params = []): array
+    {
+        $body = [
+            'garment_id' => self::param($params, 'garmentId', 'garment_id'),
+            'max_seconds' => self::param($params, 'maxSeconds', 'max_seconds'),
+            'end_user_id' => self::param($params, 'endUserId', 'end_user_id'),
+            'allowed_origin' => self::param($params, 'allowedOrigin', 'allowed_origin'),
+        ];
+
+        /** @var array{ok: true, session: LiveSession, clientSecret: string, connection: array{provider: string, model: string, token: string}, secondsPerCredit: int, maxSeconds: int, secondsLeft: int, garment: array{id: string, category: string, subcategory: string|null, description: string|null, createdAt: string, input: array{prompt: string, enhancePrompt: bool, referenceImage: string}}|null} $start */
+        $start = $this->request('POST', '/live/sessions', $body);
+
+        return $start;
+    }
+
+    /**
+     * Status and usage of a live session (id, status, endReason, seconds,
+     * creditsCharged, endUserId, createdAt, endedAt).
+     *
+     * @return LiveSession
+     */
+    public function getLiveSession(string $sessionId): array
+    {
+        /** @var LiveSession $session */
+        $session = self::arrayField($this->request('GET', '/live/sessions/' . rawurlencode($sessionId)), 'session');
+
+        return $session;
+    }
+
+    /**
+     * End a live session from your server (e.g. the user left). Idempotent.
+     * Returns the ended session.
+     *
+     * @return LiveSession
+     */
+    public function stopLiveSession(string $sessionId): array
+    {
+        /** @var LiveSession $session */
+        $session = self::arrayField(
+            $this->request('POST', '/live/sessions/' . rawurlencode($sessionId) . '/stop', []),
+            'session'
+        );
+
+        return $session;
     }
 
     /**
      * Poll a job until it completes, then return the output image URLs.
-     * Throws TryItOnException if the job fails or the timeout is reached.
+     * Throws TryItOnException if the job fails (errorName "ProcessingError",
+     * the job's own reason as the message, null status) or the timeout is
+     * reached (errorName "Timeout").
      *
-     * @return array<string>
+     * @param float $pollInterval Seconds between polls; 0 polls back to back.
+     * @param float $timeout Seconds to wait before giving up.
+     * @return list<string>
      */
     public function waitForResult(string $jobId, float $pollInterval = 2.0, float $timeout = 120.0): array
     {
@@ -129,12 +279,7 @@ class Client
                 return $status['output'];
             }
             if ($status['status'] === 'failed') {
-                $err = $status['error'] ?? [];
-                throw new TryItOnException(
-                    $err['message'] ?? 'Try-on failed.',
-                    null,
-                    $err['name'] ?? 'ProcessingError'
-                );
+                throw self::jobFailure($status['error']);
             }
             if (microtime(true) > $deadline) {
                 throw new TryItOnException("Timed out waiting for job {$jobId}.", null, 'Timeout');
@@ -144,51 +289,147 @@ class Client
     }
 
     /**
+     * Send one request and return the decoded JSON body.
+     * Throws TryItOnException on a network failure or a non-2xx response.
+     *
+     * @param 'GET'|'POST' $method
      * @param array<string, mixed>|null $body
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
-        $headers = ['Authorization: Bearer ' . $this->apiKey];
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'User-Agent' => 'tryiton-php/' . self::VERSION,
+        ];
         $payload = null;
         if ($body !== null) {
-            $payload = json_encode(array_filter($body, static fn ($v) => $v !== null));
-            $headers[] = 'Content-Type: application/json';
+            $payload = self::encodeBody($body);
+            $headers['Content-Type'] = 'application/json';
         }
 
-        $ch = curl_init($this->baseUrl . $path);
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => $this->timeout,
-        ]);
-        if ($payload !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        try {
+            $response = $this->transport->send($method, $this->baseUrl . $path, $headers, $payload);
+        } catch (TryItOnException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            // A custom transport's own exception (e.g. from a PSR-18 client): same contract as a cURL failure.
+            throw new TryItOnException('Network error: ' . $e->getMessage(), null, 'NetworkError', $e);
         }
+        $statusCode = $response['status'];
 
-        $raw = curl_exec($ch);
-        if ($raw === false) {
-            $msg = curl_error($ch);
-            curl_close($ch);
-            throw new TryItOnException("Network error: {$msg}", null, 'NetworkError');
-        }
-        $statusCode = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
-
-        $data = json_decode((string) $raw, true);
+        $data = json_decode($response['body'], true);
         if (!is_array($data)) {
             $data = [];
         }
 
         if ($statusCode < 200 || $statusCode >= 300) {
+            // API envelope: { ok: false, error: { name, message } }. Older shapes put strings at the top level.
+            $apiError = isset($data['error']) && is_array($data['error']) ? $data['error'] : [];
+            $message = $apiError['message'] ?? $data['message'] ?? null;
+            $name = $apiError['name'] ?? $data['error'] ?? null;
             throw new TryItOnException(
-                $data['message'] ?? "HTTP {$statusCode}",
+                is_string($message) && $message !== '' ? $message : "HTTP {$statusCode}",
                 $statusCode,
-                $data['error'] ?? null
+                is_string($name) ? $name : null
             );
         }
 
         return $data;
+    }
+
+    /**
+     * The JSON request body, with null (unset) options left out.
+     *
+     * @param array<string, mixed> $body
+     */
+    private static function encodeBody(array $body): string
+    {
+        $fields = array_filter($body, static fn ($v): bool => $v !== null);
+        // json_encode([]) is "[]", but the API expects a JSON object.
+        if ($fields === []) {
+            return '{}';
+        }
+
+        $json = json_encode($fields);
+        if ($json === false) {
+            // e.g. a string that isn't valid UTF-8. Without this, an empty body would be sent.
+            throw new TryItOnException(
+                'Could not encode the request as JSON: ' . json_last_error_msg(),
+                null,
+                'InvalidRequest'
+            );
+        }
+
+        return $json;
+    }
+
+    /**
+     * The job's failure reason as an exception. GET /status sends it as a
+     * plain string; { name, message } is the older shape.
+     *
+     * @param string|array{name?: string, message?: string}|null $error
+     */
+    private static function jobFailure($error): TryItOnException
+    {
+        if (is_string($error) && $error !== '') {
+            return new TryItOnException($error, null, 'ProcessingError');
+        }
+        if (is_array($error)) {
+            return new TryItOnException($error['message'] ?? 'Try-on failed.', null, $error['name'] ?? 'ProcessingError');
+        }
+
+        return new TryItOnException('Try-on failed.', null, 'ProcessingError');
+    }
+
+    /**
+     * A string field of a 2xx response.
+     *
+     * @param array<mixed> $data
+     */
+    private static function stringField(array $data, string $key): string
+    {
+        $value = $data[$key] ?? null;
+        if (!is_string($value)) {
+            throw self::unexpectedResponse($key);
+        }
+
+        return $value;
+    }
+
+    /**
+     * An object field of a 2xx response, as an array.
+     *
+     * @param array<mixed> $data
+     * @return array<mixed>
+     */
+    private static function arrayField(array $data, string $key): array
+    {
+        $value = $data[$key] ?? null;
+        if (!is_array($value)) {
+            throw self::unexpectedResponse($key);
+        }
+
+        return $value;
+    }
+
+    /**
+     * A 2xx response without the field the method returns (e.g. an HTML page
+     * from a proxy). Thrown instead of letting a TypeError escape.
+     */
+    private static function unexpectedResponse(string $key): TryItOnException
+    {
+        return new TryItOnException("Unexpected API response: no \"{$key}\" field.", null, 'InvalidResponse');
+    }
+
+    /**
+     * A param by its camelCase key, falling back to the snake_case one.
+     *
+     * @param array<string, mixed> $params
+     * @return mixed
+     */
+    private static function param(array $params, string $camel, string $snake)
+    {
+        return $params[$camel] ?? $params[$snake] ?? null;
     }
 }
