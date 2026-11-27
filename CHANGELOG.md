@@ -6,6 +6,24 @@ All notable changes to `tryiton/tryiton` are documented here. The format is base
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-27
+
+### Added
+
+- `prepareLiveGarment()` takes optional overrides: `detail_images` (up to 3 extra views that sharpen the description),
+  `description` (your item description, used in the generated prompt), `instructions` (your own prompt, used
+  verbatim) and `enhance_prompt` (`false` keeps the prompt as-is; default `true`). camelCase keys work too.
+- `prepareLiveOutfit()` (`POST /live/outfits`): combine 2 or 3 prepared garments (`garment_ids`, plus optional
+  `instructions` and `enhance_prompt`) into one outfit, returned in the garment shape. Its `id` works wherever a
+  garment id does.
+- The `LiveGarment` shape gains `prompt`, `enhancePrompt` and `items` (an outfit's garment ids top to bottom, `null`
+  for a single garment); `category` can now also be `"outfit"`. New `LiveSessionStart` `@phpstan-type` alias for the
+  `startLiveSession()` response.
+
+### Changed
+
+- The live methods moved from `Client.php` into the `LiveTryOn` trait that `Client` uses. No API change.
+
 ### Deprecated
 
 - The `mode` and `moderation_level` keys of `tryOnFashion()`: the API ignores `mode` and validates `moderation_level` without applying it. Removed in 3.0.
@@ -72,7 +90,8 @@ All notable changes to `tryiton/tryiton` are documented here. The format is base
 - First release: `tryOnClothes()`, `tryOnHairstyle()`, `tryOnTattoo()`, `getStatus()`, `waitForResult()`,
   `getCredits()` and `TryItOnException`.
 
-[Unreleased]: https://github.com/tryiton-now/tryiton-php/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/tryiton-now/tryiton-php/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/tryiton-now/tryiton-php/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/tryiton-now/tryiton-php/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/tryiton-now/tryiton-php/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/tryiton-now/tryiton-php/compare/v1.0.0...v1.1.0

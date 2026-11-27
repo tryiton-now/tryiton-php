@@ -18,7 +18,7 @@ use TryItOn\TryItOnException;
 final class ContractTest extends TestCase
 {
     /** Methods that also accept camelCase param keys; their cases run both ways. */
-    private const CAMEL_CASE_METHODS = ['prepareLiveGarment', 'startLiveSession'];
+    private const CAMEL_CASE_METHODS = ['prepareLiveGarment', 'prepareLiveOutfit', 'startLiveSession'];
 
     /** @var \stdClass|null */
     private static $fixture;
@@ -138,6 +138,8 @@ final class ContractTest extends TestCase
                 return $client->getLiveConfig();
             case 'prepareLiveGarment':
                 return $client->prepareLiveGarment($options);
+            case 'prepareLiveOutfit':
+                return $client->prepareLiveOutfit($options);
             case 'startLiveSession':
                 return $client->startLiveSession($options);
             case 'getLiveSession':
